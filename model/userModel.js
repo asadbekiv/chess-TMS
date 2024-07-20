@@ -1,17 +1,27 @@
-// import mongoose, { Schema } from 'mongoose';
 import mongoose from 'mongoose';
+import validator from 'validator';
+import bcrypt from 'bcrypt';
 const { Schema } = mongoose;
 
 const userSchema = new Schema({
   name: { type: String, required: true },
   age: { type: Number, required: true },
   rating: { type: Number, required: true },
-  role: { type: String, enum: ['admin', 'player'], default: 'user' },
+
+  email: {
+    type: String,
+    lowercase: true,
+    unique: true,
+    required: [true, 'Elektron pochta manzil talab qilinadi !'],
+    validate: [
+      validator.isEmail,
+      `Iltimos, to'g'ri elektron pochta kiriting !`,
+    ],
+  },
+  role: { type: String, enum: ['admin', 'player'], default: 'player' },
   country: {
-    name: { type: String },
-    code: { type: String },
-    continent: { type: String },
-    capital: { type: String },
+    type: String,
+    required: [true, 'mamlakat tanlang iltimos !'],
   },
 
   password: {
@@ -31,5 +41,25 @@ const userSchema = new Schema({
   },
   passwordChangedAt: Date,
 });
+
+userSchema.pre('save', async function (next) {
+  if (!this.isModified('password')) return next();
+  this.password = await bcrypt.hash(this.password, 12);
+  this.passwordConfirm = undefined;
+  next();
+});
+userSchema.pre('save', function (next) {
+  if (!this.isModified('password') || this.isNew) {
+    this.passwordChangedAt = Date.now() - 1000;
+  }
+  next();
+});
+
+userSchema.methods.correctPassword = async function (
+  candidatePassword,
+  userPassword
+) {
+  return await bcrypt.compare(candidatePassword, userPassword);
+};
 
 export const User = mongoose.model('User', userSchema);
